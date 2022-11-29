@@ -17,7 +17,7 @@ class Cache {
 }
 
 class DirectMapCache {
-    constructor(num_sets, num_blocks, num_bytes_per_block, main_memory_size = 2^32) {
+    constructor(num_sets, num_blocks, num_bytes_per_block, main_memory_size = Math.pow(2, 32)) {
         this.num_sets = num_sets;
         this.num_blocks = num_blocks;
         this.num_bytes = num_bytes_per_block;
@@ -57,16 +57,21 @@ class DirectMapCache {
          * Tag: that denotes the tag field of the address
          * Counter: that keeps track of how frequently this element is hit
          */
-
+        this.parseAddress = (address) => {
+            let splitAddress = {
+                tag: parseInt(address.substring(0, this.tag_width), 2),
+                block: parseInt(address.substring(this.tag_width, this.tag_width + this.line_field_size), 2),
+                offset: parseInt(address.substring(this.tag_width + this.line_field_size), 2),
+            }
+            return splitAddress;
+        }
         this.load = (address) => {
             // convert the address from hex to binary
             // some function
             // Split the address into tag, line, and offset. The "line" field contains our block number, which we need to turn into our line
-            let tag = 1;
-            let block = 10;
-            let offset = 2;
+            const {tag, block, offset} = this.parseAddress(address);
             // Use block % num_blocks (lines in cache)
-            let line = block % num_blocks;
+            let line = block % num_sets;
             // Check line to see if tag matches
             if (this.cache[line].tag === tag) {
                 this.cache[line].counter++;
@@ -74,6 +79,7 @@ class DirectMapCache {
                 return true;
             }
             // if tag does not match, simply replace it as per direct map functionality
+            
             this.cache.splice(line, 1, {
                 tag: tag,
                 counter: 0,
@@ -85,13 +91,16 @@ class DirectMapCache {
             
             return false;
         }
+        this.getHitRate = () => {
+            return this.hit_count/(this.hit_count+ this.miss_count)
+        }
     }
 
 
 }
 
 class FullyAssociativeCache {
-    constructor(num_sets = 1, num_blocks = 8, num_bytes_per_block = 4, main_memory_size = 2^32, replacement_policy = "FIFO") {
+    constructor(num_sets = 1, num_blocks = 8, num_bytes_per_block = 4, main_memory_size = Math.pow(2, 32), replacement_policy = "FIFO") {
         this.num_sets = num_sets;
         this.num_blocks = num_blocks;
         this.num_bytes = num_bytes_per_block;
@@ -162,6 +171,14 @@ class FullyAssociativeCache {
             return;
         }
     }
+
+    this.parseAddress = (address) => {
+        let splitAddress = {
+            tag: parseInt(address.substring(0, this.tag_width), 2),
+            offset: parseInt(address.substring(this.tag_width), 2),
+        }
+        return splitAddress;
+    }
     /**
      * @function load attempts to load the address from the cache, if a miss occurs we load it from main memory into the cache!
      * @param {string} address is a string of the address we are evaluating
@@ -171,8 +188,7 @@ class FullyAssociativeCache {
         // convert the address from hex to binary
         // some function
         // Split the address into tag and offset.
-        let tag = 1;
-        let offset = 2;
+        let {tag, offset} = this.parseAddress(address);
       
         // Since we cant check all cache entries in parallel, we just loop over cache and see if the tag is in there
         let tagFound = false;
@@ -204,6 +220,9 @@ class FullyAssociativeCache {
         // for a sort of visualizer
         
         return false;
+    }
+    this.getHitRate = () => {
+        return this.hit_count/(this.hit_count+ this.miss_count)
     }
     }
 
@@ -256,7 +275,7 @@ class NSetCache {
         this.replace = (newTag, setIndex, set) => {
             if (replacement_policy === "FIFO") {
                 this.cache.splice(setIndex, 1); // Could also use Array.pop()
-                this.cache.splice(this.setIndex + this.num_blocks - 1, 0, {
+                this.cache.splice(setIndex + this.num_blocks - 1, 0, {
                     tag: newTag,
                     counter: this.cache_count,
                     set: set,
@@ -265,7 +284,7 @@ class NSetCache {
                 return;
             }
             else { // If this runs, that means we are using LRU replacement
-                let minUse = 200000000; // some abnormally high number that will always be larger than anything in the counter field
+                let minUse = 200000000000; // some abnormally high number that will always be larger than anything in the counter field
                 let minIndex = -1;
                 // Loop over the set
                 for (let i = setIndex; i < setIndex + this.num_blocks; i++) {
@@ -284,6 +303,15 @@ class NSetCache {
                 return;
             }
         }
+
+        this.parseAddress = (address) => {
+            let splitAddress = {
+                tag: parseInt(address.substring(0, this.tag_width), 2),
+                set: parseInt(address.substring(this.tag_width, this.tag_width + this.set_field_size), 2),
+                offset: parseInt(address.substring(this.tag_width + this.set_field_size), 2),
+            }
+            return splitAddress;
+        }
         /**
          * @function load attempts to load the address from the cache, if a miss occurs we load it from main memory into the cache!
          * @param {string} address is a string of the address we are evaluating
@@ -291,9 +319,7 @@ class NSetCache {
          */
         this.load = (address) => {
             // We have a tag, an offset, and a set field
-            let tag = 1;
-            let offset = 2;
-            let set = 1; 
+            let {tag, set, offset} = this.parseAddress(address);
 
             // Our set maps to an index, which can be obtained by multiplying set * blocks per set
             let set_index = set*this.num_blocks;
@@ -304,7 +330,7 @@ class NSetCache {
                     this.hit_count++; // increment global hit count
                     this.cache[i].counter = this.cache_count; // increment element counter
                     this.cache_count++; // increment global element counter
-                    this.hit_count++;
+
                     // Return true if found
                     return true;
                 }
@@ -335,6 +361,11 @@ class NSetCache {
             // Return false since this was technically a miss and we had to replace
             return false;
         }
+        this.getHitRate = () => {
+            return this.hit_count/(this.hit_count+ this.miss_count)
+        }
     }
 
 }
+
+module.exports = {NSetCache, Cache, DirectMapCache, FullyAssociativeCache};
